@@ -9,27 +9,92 @@
 #include <signal.h>
 #include <pthread.h>
 
-// fiecare functie va verifica daca utilizatorul autentificat este admin.
-// In caz contrar va oferi un mesaj de necesitate a dreptului de administrator pentru a utiliza aceasta comanda.
+int userExistsInAdminFile = 0;
+
+static int callbackFctForExistingUser(void *data, int argc, char **argv, char **colName)
+{
+    userExistsInAdminFile = 1;
+    return 0;
+}
+
+char *adminsReqList;
+
+static int callbackFctForGettingAdminReqList(void *data, int argc, char **argv, char **colName)
+{
+    strcat(adminsReqList, argv[0]);
+    strcat(adminsReqList, "\n");
+
+    // printf("%s", adminsReqList);
+    // fflush(stdout);
+    return 0;
+}
 
 int restrictVote(int client, int idThread, char *comanda, int length)
 {
-    // restrictioneaza votul pentru un anumit utilizator
-    char ansForClient[100];
-    bzero(&ansForClient, 100);
+    char *username, lgu;
 
-    strcpy(ansForClient, "Vote restricted for user user1!\n");
-    int lenAnswer = strlen(ansForClient);
+    username = calloc(sizeof(char), 200);
 
-    if (write(client, &lenAnswer, sizeof(int)) <= 0)
+    for (int i = 16; i < length; i++)
     {
-        perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        username[lgu++] = comanda[i];
     }
 
-    if (write(client, ansForClient, lenAnswer) <= 0)
+    if (lgu == 0)
     {
-        perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "Invalid username!\n");
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
     }
+
+    sqlite3 *database;
+    sqlite3_open("topDataBase.db", &database);
+    char *errorMessage;
+    int returnCode;
+    char *sql;
+    sql = calloc(sizeof(char), 300);
+
+    strcpy(sql, "SELECT * FROM USERS WHERE USERNAME LIKE '");
+    strcat(sql, username);
+    strcat(sql, "';");
+
+    userExistsInAdminFile = 0;
+
+    returnCode = sqlite3_exec(database, sql, callbackFctForExistingUser, NULL, &errorMessage);
+
+    if (userExistsInAdminFile)
+    {
+        sql = calloc(sizeof(char), 300);
+
+        strcpy(sql, "UPDATE USERS SET RIGHTTOVOTE = 0 WHERE USERNAME LIKE '");
+        strcat(sql, username);
+        strcat(sql, "';");
+
+        printf("sql : %s\n", sql);
+        fflush(stdout);
+
+        returnCode = sqlite3_exec(database, sql, callbackFctForExistingUser, NULL, &errorMessage);
+
+        if (returnCode == SQLITE_OK)
+        {
+            printf("SQLITE_OK in restrictVote function!\n");
+            fflush(stdout);
+        }
+    }
+
+    sqlite3_close(database);
 
     return 1;
 }
@@ -48,20 +113,39 @@ int deleteSong(int client, int idThread, char *comanda, int length)
 int getAdmReqList(int client, int idThread, char *comanda, int length)
 {
     //ofera o lista a persoanelor care doresc drept de administrator
-    char ansForClient[100];
-    bzero(&ansForClient, 100);
+    sqlite3 *database;
+    sqlite3_open("topDataBase.db", &database);
+    char *errorMessage;
+    int returnCode;
+    char *sql;
+    sql = calloc(sizeof(char), 300);
 
-    strcpy(ansForClient, "Admin reqest list:\n 1.user1\n2.user2\n3.user3\n");
-    int lenAnswer = strlen(ansForClient);
+    strcpy(sql, "SELECT * FROM REQLIST;");
 
-    if (write(client, &lenAnswer, sizeof(int)) <= 0)
+    adminsReqList = (char *)calloc(sizeof(char), 1500);
+
+    returnCode = sqlite3_exec(database, sql, callbackFctForGettingAdminReqList, NULL, &errorMessage);
+
+    printf("%d\n", returnCode);
+    fflush(stdout);
+
+    if (returnCode == SQLITE_OK)
     {
-        perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
-    }
+        int ansLen = 0;
+        ansLen = strlen(adminsReqList);
 
-    if (write(client, ansForClient, lenAnswer) <= 0)
-    {
-        perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        char ansForClient[ansLen];
+        bzero(&ansForClient, ansLen);
+
+        if (write(client, &ansLen, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, adminsReqList, ansLen) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
     }
 
     return 1;

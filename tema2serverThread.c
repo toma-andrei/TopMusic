@@ -68,13 +68,14 @@ void raspunde(int client, int idThread)
             if (strstr(msgFromClient, "login "))
             {
                 loggedIn = loginApproval(client, idThread, msgFromClient, length);
-                adminRight = isAdmin(client, idThread, msgFromClient, length);
+
                 if (loggedIn)
                 {
                     for (int i = 6; i < length; i++)
                     {
                         username[lenUserName++] = msgFromClient[i];
                     }
+                    adminRight = isAdmin(client, idThread, msgFromClient, length);
                 }
                 continue;
             }

@@ -10,34 +10,137 @@
 #include <pthread.h>
 #include <sqlite3.h>
 
-//zonele critice (actualizari sau adaugari in baza de date vor fi blocate cu mecanismul MUTEX)
+int userLoggedIn;
+int userIsAdmin;
 
-static int callbackFct(void *data, int argc, char **argv, char **colName)
+int userExists;
+
+static int callbackFctForLogin(void *data, int argc, char **argv, char **colName)
 {
+    userExists = 1;
+    return 0;
+}
+
+static int callbackFctForAdminCheck(void *data, int argc, char **argv, char **colName)
+{
+    userIsAdmin = 1;
+    return 0;
 }
 
 int loginApproval(int client, int idThread, char *comanda, int length)
 {
-    char ansForClient[100];
-    bzero(&ansForClient, 100);
 
-    strcpy(ansForClient, "You are logged in!\n");
+    char *username, lgu = 0;
+    char *password, lgp = 0;
 
-    int lenAnswer = strlen(ansForClient);
+    username = calloc(sizeof(char), 100);
+    password = calloc(sizeof(char), 100);
 
-    if (write(client, &lenAnswer, sizeof(int)) <= 0)
+    int schimb = 0;
+
+    for (int i = 6; i < length; i++)
     {
-        perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        if (comanda[i] == ' ')
+        {
+            schimb = 1;
+            continue;
+        }
+
+        if (schimb == 0)
+        {
+            username[lgu++] = comanda[i];
+        }
+        else
+        {
+            password[lgp++] = comanda[i];
+        }
+    }
+
+    if (lgu == 0 || lgp == 0)
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "username or password too short!\n");
+
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
         return 0;
     }
 
-    if (write(client, ansForClient, lenAnswer) <= 0)
+    sqlite3 *database;
+    char *errorMessage;
+    int returnCode;
+    char *sql;
+    sql = calloc(sizeof(char), 400);
+
+    strcpy(sql, "SELECT * FROM USERS WHERE USERNAME LIKE '");
+    strcat(sql, username);
+    strcat(sql, "' AND PASSWORD LIKE '");
+    strcat(sql, password);
+    strcat(sql, "';");
+
+    userExists = 0;
+
+    returnCode = sqlite3_open("topDataBase.db", &database);
+    returnCode = sqlite3_exec(database, sql, callbackFctForLogin, NULL, &errorMessage);
+
+    if (returnCode == SQLITE_OK)
     {
-        perror("[thread server] Eroare la scrierea mesajului catre client!\n");
-        return 0;
+        printf("SQL ok!\n");
     }
 
-    return 1; // returneaza daca utilizatorul este prezent in baza de date.
+    if (!userExists)
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "Wrong username or password! Try again or register!\n");
+
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
+        return 0;
+    }
+    else
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "You are logged in!\n");
+
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
+        return 1;
+    }
+
+    sqlite3_close(database);
 }
 
 int regAsAdmin(int client, int idThread, char *comanda, int length)
@@ -111,7 +214,7 @@ int regAsAdmin(int client, int idThread, char *comanda, int length)
             exit(errno);
         }
 
-        returnCode = sqlite3_exec(database, sql, callbackFct, 0, &errorMessage);
+        returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
         // printf("\n%d\n", returnCode);
         // fflush(stdout);
         if (returnCode == SQLITE_OK)
@@ -161,7 +264,7 @@ int regAsAdmin(int client, int idThread, char *comanda, int length)
         strcpy(sql, "INSERT INTO REQLIST (USERNAME) VALUES('");
         strcat(sql, username);
         strcat(sql, "');");
-        returnCode = sqlite3_exec(database, sql, callbackFct, 0, &errorMessage);
+        returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
         sqlite3_close(database);
 
         if (returnCode == SQLITE_OK)
@@ -177,6 +280,7 @@ int regAsUser(int client, int idThread, char *comanda, int length)
 {
     char *username;
     char *password;
+
     username = calloc(sizeof(char), 200);
     password = calloc(sizeof(char), 200);
 
@@ -249,7 +353,7 @@ int regAsUser(int client, int idThread, char *comanda, int length)
             fflush(stdout);
         }
 
-        returnCode = sqlite3_exec(database, sql, callbackFct, 0, &errorMessage);
+        returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
         sqlite3_close(database);
 
         if (returnCode == SQLITE_OK)
@@ -298,7 +402,62 @@ int regAsUser(int client, int idThread, char *comanda, int length)
 
 int isAdmin(int client, int idThread, char *comanda, int length)
 {
-    return 1;
+    char *username, lgu = 0;
+    char *password, lgp = 0;
+
+    username = calloc(sizeof(char), 100);
+    password = calloc(sizeof(char), 100);
+
+    int schimb = 0;
+
+    for (int i = 6; i < length; i++)
+    {
+        if (comanda[i] == ' ')
+        {
+            schimb = 1;
+            continue;
+        }
+
+        if (schimb == 0)
+        {
+            username[lgu++] = comanda[i];
+        }
+        else
+        {
+            password[lgp++] = comanda[i];
+        }
+    }
+
+    sqlite3 *database;
+    char *errorMessage;
+    int returnCode;
+    char *sql;
+    sql = calloc(sizeof(char), 200);
+
+    strcpy(sql, "SELECT * FROM USERS WHERE USERNAME LIKE '");
+    strcat(sql, username);
+    strcat(sql, "' AND PASSWORD LIKE '");
+    strcat(sql, password);
+    strcat(sql, "' AND REGASADMIN=1;");
+
+    userIsAdmin = 0;
+
+    returnCode = sqlite3_open("topDataBase.db", &database);
+    returnCode = sqlite3_exec(database, sql, callbackFctForAdminCheck, NULL, &errorMessage);
+
+    if (returnCode == SQLITE_OK)
+    {
+        printf("REGASADMIN SELECT OK!\n");
+    }
+
+    if (userIsAdmin)
+    {
+        return 1;
+    }
+    else
+        return 0;
+
+    sqlite3_close(database);
 }
 
 void noAdmRight(int client)
@@ -306,7 +465,7 @@ void noAdmRight(int client)
     char ansForClient[100];
     bzero(&ansForClient, 100);
 
-    strcpy(ansForClient, "You must have administrator right for this command!\n");
+    strcpy(ansForClient, "You must be administrator for this command!\n");
 
     int lenAnswer = strlen(ansForClient);
 

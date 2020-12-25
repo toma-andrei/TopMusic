@@ -351,7 +351,7 @@ int addComment(int client, int idThread, char *comanda, int length)
     return 1;
 }
 
-int showComment(client, idThread, msgFromClient, length)
+int showComment(int client, int  idThread, char* msgFromClient, int length)
 {
     char ansForClient[100];
     bzero(&ansForClient, 100);
