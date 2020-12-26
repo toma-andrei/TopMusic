@@ -265,7 +265,7 @@ int regAsAdmin(int client, int idThread, char *comanda, int length)
         strcat(sql, username);
         strcat(sql, "');");
         returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
-        sqlite3_close(database);
+    sqlite3_close(database);
 
         if (returnCode == SQLITE_OK)
         {

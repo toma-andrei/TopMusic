@@ -12,9 +12,15 @@
 int existsRowsInDataBase = 0;
 int userAllowedToVote = 0;
 
-static int getInfoGETADDSONG(void *info, int argc, char **argv, char **colName)
+static int checkIfSongExists(void *info, int argc, char **argv, char **colName)
 {
     existsRowsInDataBase = 1;
+    return 0;
+}
+
+static int callbackFctUserAllowedToVote(void *info, int argc, char **argv, char **colName)
+{
+    userAllowedToVote = 1;
     return 0;
 }
 
@@ -132,27 +138,6 @@ int addSong(int client, char *username, char *comanda, int length)
         }
     }
 
-    // printf("song name: %s ### len: %d\n", songName, lenSongName);
-    // fflush(stdout);
-
-    // printf("song description : %s ### len : %d\n", songDescription, lenDescription);
-    // fflush(stdout);
-
-    // printf("song genre: ");
-    // fflush(stdout);
-
-    // for (int i = 0; i < nrGen; i++)
-    // {
-    //     printf("%s, ", genre[i]);
-    //     fflush(stdout);
-    // }
-
-    // printf("\n");
-    // fflush(stdout);
-
-    // printf("link: %s ### len : %d\n\n", link, lenLink);
-    // fflush(stdout);
-
     sqlite3 *database;
     char *errorMessage;
     int returnCode;
@@ -160,8 +145,6 @@ int addSong(int client, char *username, char *comanda, int length)
     sqlite3_open("topDataBase.db", &database);
 
     sql = calloc(sizeof(char), 1000);
-
-    //sql = "CREATE TABLE SONG(SONGNAME TEXT, NRVOTES INT, ADDEDBY TEXT, DESCRIPTION TEXT, LINK TEXT);";
 
     strcpy(sql, "INSERT INTO SONG (SONGNAME, NRVOTES, ADDEDBY, DESCRIPTION, LINK) VALUES('");
     strcat(sql, songName);
@@ -173,10 +156,10 @@ int addSong(int client, char *username, char *comanda, int length)
     strcat(sql, link);
     strcat(sql, "');");
 
-    //printf("\n%s\n", sql);
-    //fflush(stdout);
+    printf("\n%s\n", sql);
+    fflush(stdout);
 
-    returnCode = sqlite3_exec(database, sql, getInfoGETADDSONG, 0, &errorMessage);
+    returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errorMessage);
 
     if (returnCode == SQLITE_OK)
     {
@@ -198,8 +181,23 @@ int addSong(int client, char *username, char *comanda, int length)
     }
     else
     {
-        printf("\n%s\n", errorMessage);
-        fflush(stdout);
+        char ansForClient[200];
+        bzero(&ansForClient, 200);
+
+        strcpy(ansForClient, "Song already exists!\n");
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
+
+        return 0;
     }
 
     sql = calloc(sizeof(char), 1500);
@@ -214,7 +212,7 @@ int addSong(int client, char *username, char *comanda, int length)
     }
     printf("\n%s\n", sql);
 
-    returnCode = sqlite3_exec(database, sql, getInfoGETADDSONG, 0, &errorMessage);
+    returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errorMessage);
 
     if (returnCode == SQLITE_OK)
     {
@@ -225,7 +223,7 @@ int addSong(int client, char *username, char *comanda, int length)
     sqlite3_close(database);
 }
 
-int voteSong(int client, int idThread, char *comanda, int length)
+int voteSong(int client, char *username, char *comanda, int length)
 {
     //userul voteaza o melodie si primeste confirmare daca nu este restrictionat dreptul sau de vot.
 
@@ -236,6 +234,7 @@ int voteSong(int client, int idThread, char *comanda, int length)
     {
         songName[lenSongName++] = comanda[i];
     }
+
     sqlite3 *database;
     char *errorMessage;
     int returnCode;
@@ -247,38 +246,93 @@ int voteSong(int client, int idThread, char *comanda, int length)
     strcat(sql, songName);
     strcat(sql, "';");
 
-    returnCode = sqlite3_exec(database, sql, getInfoGETADDSONG, (void*)"diawjd", &errorMessage);
+    existsRowsInDataBase = 0;
 
-    // strcat(sql, "UPDATE SONG SET NRVOTES=NRVOTES+1 WHERE SONGNAME='");
-    // strcat(sql, songName);
-    // strcat(sql, "';");
+    returnCode = sqlite3_exec(database, sql, checkIfSongExists, NULL, &errorMessage);
 
-    printf("\n%d\n", returnCode);
-
-
-    //returnCode = sqlite3_exec(database, sql, getInfoGETADDSONG, 0, &errorMessage);
-    printf("%s", errorMessage);
-    fflush(stdout);
-    if (returnCode == SQLITE_OK)
+    if (existsRowsInDataBase)
     {
-        printf("Vote added!\n");
-        fflush(stdout);
+        userAllowedToVote = 0;
+
+        sql = calloc(sizeof(char), 300);
+        strcpy(sql, "SELECT * FROM USERS WHERE USERNAME LIKE '");
+        strcat(sql, username);
+        strcat(sql, "' AND RIGHTTOVOTE = 1;");
+
+        // printf("%s", sql);
+        // fflush(stdout);
+
+        sqlite3_exec(database, sql, callbackFctUserAllowedToVote, NULL, &errorMessage);
+
+        if (userAllowedToVote)
+        {
+            sql = calloc(sizeof(char), 300);
+
+            strcat(sql, "UPDATE SONG SET NRVOTES=NRVOTES+1 WHERE SONGNAME='");
+            strcat(sql, songName);
+            strcat(sql, "';");
+
+            returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errorMessage);
+
+            // printf("error msg: %s", errorMessage);
+            // fflush(stdout);
+
+            if (returnCode == SQLITE_OK)
+            {
+                char ansForClient[100];
+                bzero(&ansForClient, 100);
+
+                strcpy(ansForClient, "Song voted!\n");
+                int lenAnswer = strlen(ansForClient);
+
+                if (write(client, &lenAnswer, sizeof(int)) <= 0)
+                {
+                    perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+                }
+
+                if (write(client, ansForClient, lenAnswer) <= 0)
+                {
+                    perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+                }
+            }
+        }
+        else
+        {
+            char ansForClient[100];
+            bzero(&ansForClient, 100);
+
+            strcpy(ansForClient, "You are not allowed to vote!\n");
+
+            int lenAnswer = strlen(ansForClient);
+
+            if (write(client, &lenAnswer, sizeof(int)) <= 0)
+            {
+                perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+            }
+
+            if (write(client, ansForClient, lenAnswer) <= 0)
+            {
+                perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+            }
+        }
     }
-
-    char ansForClient[100];
-    bzero(&ansForClient, 100);
-
-    strcpy(ansForClient, "Song voted!\n");
-    int lenAnswer = strlen(ansForClient);
-
-    if (write(client, &lenAnswer, sizeof(int)) <= 0)
+    else
     {
-        perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
-    }
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
 
-    if (write(client, ansForClient, lenAnswer) <= 0)
-    {
-        perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        strcpy(ansForClient, "Song does not exist!\n");
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
     }
 
     return 1;
@@ -351,7 +405,7 @@ int addComment(int client, int idThread, char *comanda, int length)
     return 1;
 }
 
-int showComment(int client, int  idThread, char* msgFromClient, int length)
+int showComment(int client, int idThread, char *msgFromClient, int length)
 {
     char ansForClient[100];
     bzero(&ansForClient, 100);

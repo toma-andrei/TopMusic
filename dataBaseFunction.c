@@ -103,5 +103,6 @@ void createDataBase()
         printf("Table reqlist created successfully\n");
         fflush(stdout);
     }
+
     sqlite3_close(database);
 }

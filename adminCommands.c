@@ -31,7 +31,7 @@ static int callbackFctForGettingAdminReqList(void *data, int argc, char **argv, 
 
 int restrictVote(int client, int idThread, char *comanda, int length)
 {
-    char *username, lgu;
+    char *username, lgu = 0;
 
     username = calloc(sizeof(char), 200);
 
@@ -78,6 +78,9 @@ int restrictVote(int client, int idThread, char *comanda, int length)
     {
         sql = calloc(sizeof(char), 300);
 
+        printf("working!");
+        fflush(stdout);
+
         strcpy(sql, "UPDATE USERS SET RIGHTTOVOTE = 0 WHERE USERNAME LIKE '");
         strcat(sql, username);
         strcat(sql, "';");
@@ -87,10 +90,51 @@ int restrictVote(int client, int idThread, char *comanda, int length)
 
         returnCode = sqlite3_exec(database, sql, callbackFctForExistingUser, NULL, &errorMessage);
 
+        printf("return code: %d", returnCode);
+        fflush(stdout);
+
         if (returnCode == SQLITE_OK)
         {
             printf("SQLITE_OK in restrictVote function!\n");
             fflush(stdout);
+
+            char ansForClient[100];
+            bzero(&ansForClient, 100);
+
+            strcpy(ansForClient, "Vote restricted for user ");
+            strcat(ansForClient, username);
+            strcat(ansForClient, "!\n");
+            int lenAnswer = strlen(ansForClient);
+            printf("%s", ansForClient);
+            fflush(stdout);
+            if (write(client, &lenAnswer, sizeof(int)) <= 0)
+            {
+                perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+            }
+
+            if (write(client, ansForClient, lenAnswer) <= 0)
+            {
+                perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+            }
+        }
+    }
+    else
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "User does not exist!\n");
+        int lenAnswer = strlen(ansForClient);
+        printf("%s", ansForClient);
+        fflush(stdout);
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
         }
     }
 
