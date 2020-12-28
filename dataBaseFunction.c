@@ -48,7 +48,7 @@ void createDataBase()
         fflush(stdout);
     }
 
-    sql = "CREATE TABLE SONG(SONGNAME TEXT UNIQUE, NRVOTES INT, ADDEDBY TEXT, DESCRIPTION TEXT, LINK TEXT);";
+    sql = "CREATE TABLE SONG(SONGNAME TEXT UNIQUE, NRVOTES INT, ADDEDBY TEXT, DESCRIPTION TEXT, GENRE TEXT, LINK TEXT);";
     returnCode = sqlite3_exec(database, sql, getInfoDATABASEFUNCTION, 0, &errorMessage);
 
     if (returnCode != SQLITE_OK)
@@ -103,6 +103,9 @@ void createDataBase()
         printf("Table reqlist created successfully\n");
         fflush(stdout);
     }
+
+    sql = "INSERT INTO USERS (REGASADMIN, RIGHTTOVOTE, USERNAME, PASSWORD) VALUES(1,1,'admin','admin');";
+    returnCode = sqlite3_exec(database, sql, getInfoDATABASEFUNCTION, 0, &errorMessage);
 
     sqlite3_close(database);
 }

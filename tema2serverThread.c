@@ -186,7 +186,7 @@ void raspunde(int client, int idThread)
 
             if (strstr(msgFromClient, "add comment ("))
             {
-                addComment(client, idThread, msgFromClient, length);
+                addComment(client, username, msgFromClient, length);
                 continue;
             }
 
