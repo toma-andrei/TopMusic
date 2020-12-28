@@ -73,8 +73,12 @@ void raspunde(int client, int idThread)
                 {
                     for (int i = 6; i < length; i++)
                     {
+                        if(msgFromClient[i] == ' ')
+                            break;
                         username[lenUserName++] = msgFromClient[i];
                     }
+                    printf("%s\n", username);
+                    fflush(stdout);
                     adminRight = isAdmin(client, idThread, msgFromClient, length);
                 }
                 continue;
@@ -164,7 +168,7 @@ void raspunde(int client, int idThread)
 
             if (strstr(msgFromClient, "vote "))
             {
-                voteSong(client, idThread, msgFromClient, length);
+                voteSong(client, username, msgFromClient, length);
                 continue;
             }
 
@@ -182,7 +186,7 @@ void raspunde(int client, int idThread)
 
             if (strstr(msgFromClient, "add comment ("))
             {
-                addComment(client, idThread, msgFromClient, length);
+                addComment(client, username, msgFromClient, length);
                 continue;
             }
 
