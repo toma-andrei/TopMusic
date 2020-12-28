@@ -62,20 +62,6 @@ void createDataBase()
         fflush(stdout);
     }
 
-    sql = "CREATE TABLE GENRE(GENRE CHAR(20), SONGNAME TEXT);";
-    returnCode = sqlite3_exec(database, sql, getInfoDATABASEFUNCTION, 0, &errorMessage);
-
-    if (returnCode != SQLITE_OK)
-    {
-        printf("Error at creating table GENRE!\n");
-        fflush(stdout);
-    }
-    else
-    {
-        printf("Table genre created successfully\n");
-        fflush(stdout);
-    }
-
     sql = "CREATE TABLE COMMENTS(SONGNAME TEXT, COMMENT TEXT, ADDEDBY TEXT);";
     returnCode = sqlite3_exec(database, sql, getInfoDATABASEFUNCTION, 0, &errorMessage);
 

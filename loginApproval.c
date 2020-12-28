@@ -12,7 +12,6 @@
 
 int userLoggedIn;
 int userIsAdmin;
-
 int userExists;
 
 static int callbackFctForLogin(void *data, int argc, char **argv, char **colName)
@@ -265,7 +264,7 @@ int regAsAdmin(int client, int idThread, char *comanda, int length)
         strcat(sql, username);
         strcat(sql, "');");
         returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
-    sqlite3_close(database);
+        sqlite3_close(database);
 
         if (returnCode == SQLITE_OK)
         {
@@ -383,7 +382,7 @@ int regAsUser(int client, int idThread, char *comanda, int length)
             char ansForClient[100];
             bzero(&ansForClient, 100);
 
-            strcpy(ansForClient, "Something went wrong! You couldn't register!\n");
+            strcpy(ansForClient, "Username already exists!\n");
 
             int lenAnswer = strlen(ansForClient);
 

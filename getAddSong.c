@@ -241,27 +241,6 @@ int addSong(int client, char *username, char *comanda, int length)
         return 0;
     }
 
-    sql = calloc(sizeof(char), 1500);
-
-    for (int i = 0; i < nrGen; i++)
-    {
-        strcat(sql, "INSERT INTO GENRE(GENRE, SONGNAME) VALUES('");
-        strcat(sql, genre[i]);
-        strcat(sql, "','");
-        strcat(sql, songName);
-        strcat(sql, "'); ");
-    }
-    //printf("\n%s\n", sql);
-    // fflush(stdout);
-
-    returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errorMessage);
-
-    if (returnCode == SQLITE_OK)
-    {
-        printf("Inserted successfully in GENRE!\n");
-        fflush(stdout);
-    }
-
     sqlite3_close(database);
     return 1;
 }
@@ -628,6 +607,59 @@ int addComment(int client, char *username, char *comanda, int length)
     sqlite3_close(database);
 
     return 1;
+}
+
+int deleteComment(int client, int idThread, char *comanda, int length)
+{
+    char *comment;
+    comment = calloc(sizeof(char), 300);
+
+    int lencomm = 0;
+
+    for (int i = 15; i < length; i++)
+    {
+        comment[lencomm++] = comanda[i];
+    }
+
+    sqlite3 *database;
+    char *errormsg;
+    int returnCode;
+    char *sql;
+
+    sql = calloc(sizeof(char), 400);
+
+    sqlite3_open("topDataBase.db", &database);
+
+    strcpy(sql, "DELETE FROM COMMENTS WHERE COMMENT='");
+    strcat(sql, comment);
+    strcat(sql, "';");
+
+    returnCode = sqlite3_exec(database, sql, callbackFctForAdminCheck, 0, &errormsg);
+
+    if (returnCode == SQLITE_OK)
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "Comment deleted!\n");
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
+        return 0;
+    }
+    else
+    {
+        printf("%s", errormsg);
+        fflush(stdout);
+    }
 }
 
 int showComment(int client, int idThread, char *comanda, int length)
