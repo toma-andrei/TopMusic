@@ -30,7 +30,7 @@ static int callbackFctForGettingAdminReqList(void *data, int argc, char **argv, 
     return 0;
 }
 
-int restrictVote(int client, int idThread, char *comanda, int length)
+int restrictVote(int client, pthread_mutex_t *lockInAdminFile, char *comanda, int length)
 {
     char *username, lgu = 0;
 
@@ -71,12 +71,16 @@ int restrictVote(int client, int idThread, char *comanda, int length)
     strcat(sql, username);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockInAdminFile);
+
     userExistsInAdminFile = 0;
 
     returnCode = sqlite3_exec(database, sql, callbackFctForExistingUser, NULL, &errorMessage);
 
     if (userExistsInAdminFile)
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         sql = calloc(sizeof(char), 300);
 
         // printf("working!");
@@ -91,8 +95,8 @@ int restrictVote(int client, int idThread, char *comanda, int length)
 
         returnCode = sqlite3_exec(database, sql, callbackFctForExistingUser, NULL, &errorMessage);
 
-        printf("return code: %d", returnCode);
-        fflush(stdout);
+        //printf("return code: %d", returnCode);
+        //fflush(stdout);
 
         if (returnCode == SQLITE_OK)
         {
@@ -121,6 +125,8 @@ int restrictVote(int client, int idThread, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -144,7 +150,7 @@ int restrictVote(int client, int idThread, char *comanda, int length)
     return 1;
 }
 
-int deleteSong(int client, int idThread, char *comanda, int length)
+int deleteSong(int client, pthread_mutex_t *lockInAdminFile, char *comanda, int length)
 {
     char *songname, lgsong = 0;
 
@@ -163,6 +169,8 @@ int deleteSong(int client, int idThread, char *comanda, int length)
 
     sql = calloc(sizeof(char), 300);
 
+    pthread_mutex_lock(lockInAdminFile);
+
     userExistsInAdminFile = 0;
 
     strcpy(sql, "SELECT * FROM SONG WHERE SONGNAME='");
@@ -173,7 +181,10 @@ int deleteSong(int client, int idThread, char *comanda, int length)
 
     if (userExistsInAdminFile)
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         sql = calloc(sizeof(char), 500);
+
         strcpy(sql, "DELETE FROM SONG WHERE SONGNAME='");
         strcat(sql, songname);
         strcat(sql, "'; DELETE FROM COMMENTS WHERE SONGNAME='");
@@ -189,6 +200,8 @@ int deleteSong(int client, int idThread, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -210,6 +223,7 @@ int deleteSong(int client, int idThread, char *comanda, int length)
 
         return 0;
     }
+
     char ansForClient[100];
     bzero(&ansForClient, 100);
 
@@ -230,9 +244,10 @@ int deleteSong(int client, int idThread, char *comanda, int length)
     return 1;
 }
 
-int getAdmReqList(int client, int idThread, char *comanda, int length)
+int getAdmReqList(int client, pthread_mutex_t *lockInAdminFile, char *comanda, int length)
 {
     //ofera o lista a persoanelor care doresc drept de administrator
+
     sqlite3 *database;
 
     sqlite3_open("topDataBase.db", &database);
@@ -243,6 +258,8 @@ int getAdmReqList(int client, int idThread, char *comanda, int length)
     sql = calloc(sizeof(char), 300);
 
     strcpy(sql, "SELECT * FROM REQLIST;");
+
+    pthread_mutex_lock(lockInAdminFile);
 
     adminsReqList = (char *)calloc(sizeof(char), 1500);
 
@@ -271,12 +288,15 @@ int getAdmReqList(int client, int idThread, char *comanda, int length)
             perror("[thread server] Eroare la scrierea mesajului catre client!\n");
         }
     }
+
+    pthread_mutex_unlock(lockInAdminFile);
+
     sqlite3_close(database);
 
     return 1;
 }
 
-int acceptAdminRequest(int client, int idThread, char *comanda, int length)
+int acceptAdminRequest(int client, pthread_mutex_t *lockInAdminFile, char *comanda, int length)
 {
     //accepta cererea de admin pentru un anumit utilizator
 
@@ -320,12 +340,16 @@ int acceptAdminRequest(int client, int idThread, char *comanda, int length)
     strcat(sql, username);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockInAdminFile);
+
     userExistsInAdminFile = 0;
 
     sqlite3_exec(database, sql, callbackFctForExistingUser, 0, &errormsg);
 
     if (userExistsInAdminFile)
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         sql = calloc(sizeof(char), 300);
         strcpy(sql, "UPDATE USERS SET REGASADMIN = 1 WHERE USERNAME='");
         strcat(sql, username);
@@ -340,6 +364,8 @@ int acceptAdminRequest(int client, int idThread, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -361,6 +387,8 @@ int acceptAdminRequest(int client, int idThread, char *comanda, int length)
 
         return 0;
     }
+
+    pthread_mutex_unlock(lockInAdminFile);
 
     char ansForClient[100];
     bzero(&ansForClient, 100);
@@ -386,9 +414,8 @@ int acceptAdminRequest(int client, int idThread, char *comanda, int length)
     return 1;
 }
 
-int rejectAdminRequest(int client, int idThread, char *comanda, int length)
+int rejectAdminRequest(int client, pthread_mutex_t *lockInAdminFile, char *comanda, int length)
 {
-    // respinge cererea de admin pentru un anumit utilizator
 
     char *username, lgu = 0;
     username = calloc(sizeof(char), 200);
@@ -430,12 +457,15 @@ int rejectAdminRequest(int client, int idThread, char *comanda, int length)
     strcat(sql, username);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockInAdminFile);
+
     userExistsInAdminFile = 0;
 
     sqlite3_exec(database, sql, callbackFctForExistingUser, 0, &errormsg);
 
     if (userExistsInAdminFile)
     {
+        pthread_mutex_unlock(lockInAdminFile);
         sql = calloc(sizeof(char), 300);
         strcpy(sql, "DELETE FROM REQLIST WHERE USERNAME='");
         strcat(sql, username);
@@ -448,6 +478,8 @@ int rejectAdminRequest(int client, int idThread, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockInAdminFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -466,6 +498,8 @@ int rejectAdminRequest(int client, int idThread, char *comanda, int length)
         }
         return 0;
     }
+
+    pthread_mutex_unlock(lockInAdminFile);
 
     char ansForClient[100];
     bzero(&ansForClient, 100);

@@ -174,7 +174,9 @@ int addSong(int client, char *username, char *comanda, int length)
     char *errorMessage;
     int returnCode;
     char *sql;
+
     sqlite3_open("topDataBase.db", &database);
+
     for (int i = 0; i < nrGen - 1; i++)
     {
         strcat(genreList, genre[i]);
@@ -241,32 +243,11 @@ int addSong(int client, char *username, char *comanda, int length)
         return 0;
     }
 
-    sql = calloc(sizeof(char), 1500);
-
-    for (int i = 0; i < nrGen; i++)
-    {
-        strcat(sql, "INSERT INTO GENRE(GENRE, SONGNAME) VALUES('");
-        strcat(sql, genre[i]);
-        strcat(sql, "','");
-        strcat(sql, songName);
-        strcat(sql, "'); ");
-    }
-    //printf("\n%s\n", sql);
-    // fflush(stdout);
-
-    returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errorMessage);
-
-    if (returnCode == SQLITE_OK)
-    {
-        printf("Inserted successfully in GENRE!\n");
-        fflush(stdout);
-    }
-
     sqlite3_close(database);
     return 1;
 }
 
-int voteSong(int client, char *username, char *comanda, int length)
+int voteSong(int client, char *username, char *comanda, int length, pthread_mutex_t *lockgetAddSongFile)
 {
     //userul voteaza o melodie si primeste confirmare daca nu este restrictionat dreptul sau de vot.
 
@@ -289,6 +270,8 @@ int voteSong(int client, char *username, char *comanda, int length)
     strcat(sql, songName);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockgetAddSongFile);
+
     existsRowsInDataBase = 0;
 
     returnCode = sqlite3_exec(database, sql, checkIfSongExists, NULL, &errorMessage);
@@ -309,6 +292,8 @@ int voteSong(int client, char *username, char *comanda, int length)
 
         if (userAllowedToVote)
         {
+            pthread_mutex_unlock(lockgetAddSongFile);
+
             sql = calloc(sizeof(char), 300);
 
             strcat(sql, "UPDATE SONG SET NRVOTES=NRVOTES+1 WHERE SONGNAME='");
@@ -341,6 +326,7 @@ int voteSong(int client, char *username, char *comanda, int length)
         }
         else
         {
+            pthread_mutex_unlock(lockgetAddSongFile);
             char ansForClient[100];
             bzero(&ansForClient, 100);
 
@@ -362,10 +348,13 @@ int voteSong(int client, char *username, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockgetAddSongFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
         strcpy(ansForClient, "Song does not exist!\n");
+
         int lenAnswer = strlen(ansForClient);
 
         if (write(client, &lenAnswer, sizeof(int)) <= 0)
@@ -383,7 +372,7 @@ int voteSong(int client, char *username, char *comanda, int length)
     return 1;
 }
 
-int topGeneral(int client, int idThread, char *comanda, int length)
+int topGeneral(int client, pthread_mutex_t *lockgetAddSongFile, char *comanda, int length)
 {
     //ofera clientului topul general.
 
@@ -397,6 +386,8 @@ int topGeneral(int client, int idThread, char *comanda, int length)
     sql = calloc(sizeof(char), 300);
 
     strcpy(sql, "SELECT * FROM SONG ORDER BY NRVOTES DESC;");
+
+    pthread_mutex_lock(lockgetAddSongFile);
 
     top = (char *)calloc(sizeof(char), 400000);
 
@@ -427,13 +418,14 @@ int topGeneral(int client, int idThread, char *comanda, int length)
         printf("dim: %d\nstring: %s\n", returnCode, top);
         fflush(stdout);
     }
+    pthread_mutex_unlock(lockgetAddSongFile);
 
     sqlite3_close(database);
 
     return 1;
 }
 
-int topForGenre(int client, int idThread, char *comanda, int length)
+int topForGenre(int client, pthread_mutex_t *lockgetAddSongFile, char *comanda, int length)
 {
     //ofera clientului topul pentru genul specificat de catre el.
 
@@ -457,6 +449,8 @@ int topForGenre(int client, int idThread, char *comanda, int length)
     strcpy(sql, "SELECT * FROM SONG WHERE GENRE LIKE '%");
     strcat(sql, genre);
     strcat(sql, "%' ORDER BY NRVOTES DESC;");
+
+    pthread_mutex_lock(lockgetAddSongFile);
 
     top = (char *)calloc(sizeof(char), 400000);
 
@@ -490,17 +484,17 @@ int topForGenre(int client, int idThread, char *comanda, int length)
     }
     else
     {
-
         printf("dim: %d\nstring: %s\n", returnCode, top);
         fflush(stdout);
     }
-
     sqlite3_close(database);
+
+    pthread_mutex_unlock(lockgetAddSongFile);
 
     return 1;
 }
 
-int addComment(int client, char *username, char *comanda, int length)
+int addComment(int client, char *username, char *comanda, int length, pthread_mutex_t *lockgetAddSongFile)
 {
     char *comment, *songname;
 
@@ -555,6 +549,8 @@ int addComment(int client, char *username, char *comanda, int length)
     strcat(sql, songname);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockgetAddSongFile);
+
     existsRowsInDataBase = 0;
 
     returnCode = sqlite3_exec(database, sql, checkIfSongExists, 0, &errormsg);
@@ -564,6 +560,7 @@ int addComment(int client, char *username, char *comanda, int length)
 
     if (existsRowsInDataBase)
     {
+        pthread_mutex_unlock(lockgetAddSongFile);
         sql = calloc(sizeof(char), 500);
 
         //sql = "CREATE TABLE COMMENTS(SONGNAME TEXT, COMMENT TEXT, ADDEDBY TEXT);";
@@ -586,6 +583,7 @@ int addComment(int client, char *username, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockgetAddSongFile);
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -607,6 +605,8 @@ int addComment(int client, char *username, char *comanda, int length)
 
         return 0;
     }
+
+    pthread_mutex_unlock(lockgetAddSongFile);
 
     char ansForClient[100];
     bzero(&ansForClient, 100);
@@ -630,7 +630,60 @@ int addComment(int client, char *username, char *comanda, int length)
     return 1;
 }
 
-int showComment(int client, int idThread, char *comanda, int length)
+int deleteComment(int client, int idThread, char *comanda, int length)
+{
+    char *comment;
+    comment = calloc(sizeof(char), 300);
+
+    int lencomm = 0;
+
+    for (int i = 15; i < length; i++)
+    {
+        comment[lencomm++] = comanda[i];
+    }
+
+    sqlite3 *database;
+    char *errormsg;
+    int returnCode;
+    char *sql;
+
+    sql = calloc(sizeof(char), 400);
+
+    sqlite3_open("topDataBase.db", &database);
+
+    strcpy(sql, "DELETE FROM COMMENTS WHERE COMMENT='");
+    strcat(sql, comment);
+    strcat(sql, "';");
+
+    returnCode = sqlite3_exec(database, sql, callbackFctForAdminCheck, 0, &errormsg);
+
+    if (returnCode == SQLITE_OK)
+    {
+        char ansForClient[100];
+        bzero(&ansForClient, 100);
+
+        strcpy(ansForClient, "Comment deleted!\n");
+        int lenAnswer = strlen(ansForClient);
+
+        if (write(client, &lenAnswer, sizeof(int)) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea dimensiunii catre client!\n");
+        }
+
+        if (write(client, ansForClient, lenAnswer) <= 0)
+        {
+            perror("[thread server] Eroare la scrierea mesajului catre client!\n");
+        }
+        return 0;
+    }
+    else
+    {
+        printf("%s", errormsg);
+        fflush(stdout);
+    }
+}
+
+int showComment(int client, pthread_mutex_t *lockgetAddSongFile, char *comanda, int length)
 {
     char *songname;
 
@@ -671,9 +724,14 @@ int showComment(int client, int idThread, char *comanda, int length)
 
     sqlite3_open("topDataBase.db", &database);
 
-    strcpy(sql, "SELECT * FROM COMMENTS WHERE SONGNAME = '");
+    strcpy(sql, "SELECT * FROM SONG WHERE SONGNAME = '");
     strcat(sql, songname);
     strcat(sql, "';");
+
+    // printf("%s\n", songname);
+    // fflush(stdout);
+
+    pthread_mutex_lock(lockgetAddSongFile);
 
     existsRowsInDataBase = 0;
 
@@ -703,13 +761,15 @@ int showComment(int client, int idThread, char *comanda, int length)
 
         strcat(comments, songname);
         strcat(comments, "***\n");
-        // printf("%s\n", sql);
-        // fflush(stdout);
+        printf("%s\n", sql);
+        fflush(stdout);
 
         returnCode = sqlite3_exec(database, sql, callbackFctForComments, 0, &errormsg);
     }
     else
     {
+        pthread_mutex_unlock(lockgetAddSongFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -745,6 +805,8 @@ int showComment(int client, int idThread, char *comanda, int length)
     }
 
     sqlite3_close(database);
+
+    pthread_mutex_unlock(lockgetAddSongFile);
 
     return 1;
 }

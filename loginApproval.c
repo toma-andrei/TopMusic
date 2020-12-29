@@ -12,7 +12,6 @@
 
 int userLoggedIn;
 int userIsAdmin;
-
 int userExists;
 
 static int callbackFctForLogin(void *data, int argc, char **argv, char **colName)
@@ -27,7 +26,7 @@ static int callbackFctForAdminCheck(void *data, int argc, char **argv, char **co
     return 0;
 }
 
-int loginApproval(int client, int idThread, char *comanda, int length)
+int loginApproval(int client, pthread_mutex_t *lockLogApprovalFile, char *comanda, int length)
 {
 
     char *username, lgu = 0;
@@ -89,6 +88,8 @@ int loginApproval(int client, int idThread, char *comanda, int length)
     strcat(sql, password);
     strcat(sql, "';");
 
+    pthread_mutex_lock(lockLogApprovalFile);
+
     userExists = 0;
 
     returnCode = sqlite3_open("topDataBase.db", &database);
@@ -101,6 +102,8 @@ int loginApproval(int client, int idThread, char *comanda, int length)
 
     if (!userExists)
     {
+        pthread_mutex_unlock(lockLogApprovalFile);
+
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -121,6 +124,7 @@ int loginApproval(int client, int idThread, char *comanda, int length)
     }
     else
     {
+        pthread_mutex_unlock(lockLogApprovalFile);
         char ansForClient[100];
         bzero(&ansForClient, 100);
 
@@ -265,7 +269,7 @@ int regAsAdmin(int client, int idThread, char *comanda, int length)
         strcat(sql, username);
         strcat(sql, "');");
         returnCode = sqlite3_exec(database, sql, callbackFctForLogin, 0, &errorMessage);
-    sqlite3_close(database);
+        sqlite3_close(database);
 
         if (returnCode == SQLITE_OK)
         {
@@ -383,7 +387,7 @@ int regAsUser(int client, int idThread, char *comanda, int length)
             char ansForClient[100];
             bzero(&ansForClient, 100);
 
-            strcpy(ansForClient, "Something went wrong! You couldn't register!\n");
+            strcpy(ansForClient, "Username already exists!\n");
 
             int lenAnswer = strlen(ansForClient);
 
@@ -400,7 +404,7 @@ int regAsUser(int client, int idThread, char *comanda, int length)
     }
 }
 
-int isAdmin(int client, int idThread, char *comanda, int length)
+int isAdmin(int client, pthread_mutex_t *lockLogApproval, char *comanda, int length)
 {
     char *username, lgu = 0;
     char *password, lgp = 0;
@@ -440,6 +444,8 @@ int isAdmin(int client, int idThread, char *comanda, int length)
     strcat(sql, password);
     strcat(sql, "' AND REGASADMIN=1;");
 
+    pthread_mutex_lock(lockLogApproval);
+    //sleep(20);
     userIsAdmin = 0;
 
     returnCode = sqlite3_open("topDataBase.db", &database);
@@ -452,10 +458,11 @@ int isAdmin(int client, int idThread, char *comanda, int length)
 
     if (userIsAdmin)
     {
+        pthread_mutex_unlock(lockLogApproval);
         return 1;
     }
-    else
-        return 0;
+    pthread_mutex_unlock(lockLogApproval);
+    return 0;
 
     sqlite3_close(database);
 }
